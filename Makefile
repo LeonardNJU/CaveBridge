@@ -75,6 +75,9 @@ pylint:
 check: advent cheat pylint cppcheck
 	cd tests; $(MAKE) --quiet
 
+spellcheck:
+	@batchspell adventure.yaml
+
 reflow:
 	@clang-format --style="{IndentWidth: 8, UseTab: ForIndentation}" -i $$(find . -name "*.[ch]")
 	@black --quiet *.py

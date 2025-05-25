@@ -16,8 +16,8 @@ of Peje Nilsson in restructuring some particularly grotty gotos is
 gratefully acknowledged. Petr Voropaev contributed fuzz testing and
 code cleanups. Aaron Traas did a lot of painstaking work to improve
 test coverage, and factored out the last handful of gotos.  Ryan
-Sarson nudged us into fixing a longstannding minor bug in the
-handling of incorrect magic-word sequebcesm, 
+Sarson nudged us into fixing a longstanding minor bug in the
+handling of incorrect magic-word sequences, 
 
 == Nomenclature ==
 
@@ -75,7 +75,8 @@ Bug fixes:
 
 * A few minor typos have been corrected: absence of capitalization on
   "Swiss" and "Persian", inconsistent spelling of "imbedded" vs. "embedded",
-  "eying" for "eyeing", "thresholds" for "threshholds".
+  "eying" for "eyeing", "thresholds" for "threshholds", "pencilled"
+  for "penciled".
 
 * Under odd circumstances (dropping rug or vase outdoors) the game could
   formerly say "floor" when it should say "ground" (or "dirt", or

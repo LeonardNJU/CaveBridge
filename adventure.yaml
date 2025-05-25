@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: (C) Eric S. Raymond <esr@thyrsus.com>
 # SPDX-License-Identifier: BSD-2-Clause
 #
+# batchspell: add XYZZY Twopit Bedquilt ne se sw nw dwarves dwarvish gouts
+# batchspell: add Crowther add axe pinin Har har meself Hmmm Adventuredom
+# batchspell: add Tsk gameplay bugfixes
+#
 # This YAML file gets processed into a collection of data structures and
 # variable initializers describing Colossal Cave.  It replaces an ad-hoc
 # text database shipped with Adventure versions up to 2.5.  The format
@@ -3432,7 +3436,7 @@ objects: !!omap
     - 'There are a few recent issues of "Spelunker Today" magazine here.'
     texts:
     - |-
-      I'm afraid the magazine is written in dwarvish.  But pencilled on one
+      I'm afraid the magazine is written in dwarvish.  But penciled on one
       cover you see, "Please leave the magazines at the construction site."
 - DWARF:
     words: ['dwarf', 'dwarv']
@@ -3940,11 +3944,13 @@ obituaries:
         Oh dear, you seem to have gotten yourself killed.  I might be able to
         help you out, but I've never really done this before.  Do you want me
         to try to reincarnate you?
+    # batchspell: add wr
     yes_response: |-
         All right.  But don't blame me if something goes wr......
                             --- POOF!! ---
         You are engulfed in a cloud of orange smoke.  Coughing and gasping,
         you emerge from the smoke and find....
+    # batchspell: remove wr
   - query: |-
         You clumsy oaf, you've done it again!  I don't know how long I can
         keep this up.  Do you want me to try reincarnating you again?
@@ -4226,7 +4232,7 @@ actions: !!omap
     message: |-
       There is a puff of orange smoke; within it, fiery runes spell out:
       
-      \tOpen Adventure %V - http://www.catb.org/esr/open-adventure/
+      Open Adventure %V - http://www.catb.org/esr/open-adventure/
     words: ['versi']
     noaction: true
 
