@@ -2,6 +2,10 @@
 // SPDX-FileCopyrightText: (C) Eric S. Raymond <esr@thyrsus.com>
 // SPDX-License-Identifier: CC-BY-4.0
 
+Repository head::
+  Code hardenung with ChatGPT 5.2, cppcheck, and pylint.
+  All text spellchecked
+
 1.20: 2024-09-23::
   Make oldstyle correctly suppress line editing.
 
