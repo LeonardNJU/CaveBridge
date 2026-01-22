@@ -16,7 +16,7 @@
 
 int main(int argc, char *argv[]) {
 	int ch;
-	char *savefilename = NULL;
+	const char *savefilename = NULL;
 	FILE *fp = NULL;
 
 	// Initialize game variables

@@ -24,6 +24,13 @@ DONOTEDIT_COMMENT = "/* Generated from adventure.yaml - do not hand-hack! */\n\n
 
 statedefines = ""
 
+# pacify pylint
+db = {}
+locnames = []
+msgnames = []
+objnames = []
+motionnames = []
+
 
 def make_c_string(string):
     """Render a Python string into C string literal format."""
@@ -115,7 +122,7 @@ def get_locations(loc):
     }},
 """
     loc_str = ""
-    for (i, item) in enumerate(loc):
+    for i, item in enumerate(loc):
         short_d = make_c_string(item[1]["description"]["short"])
         long_d = make_c_string(item[1]["description"]["long"])
         sound = item[1].get("sound", "SILENT")
@@ -148,7 +155,7 @@ def get_objects(obj):
 """
     max_state = 0
     obj_str = ""
-    for (i, item) in enumerate(obj):
+    for i, item in enumerate(obj):
         attr = item[1]
         try:
             words_str = get_string_group(attr["words"])
@@ -168,7 +175,7 @@ def get_objects(obj):
             if labels:
                 global statedefines
                 statedefines += "/* States for %s */\n" % item[0]
-                for (n, label) in enumerate(labels):
+                for n, label in enumerate(labels):
                     statedefines += "#define %s\t%d\n" % (label, n)
                     max_state = max(max_state, n)
                 statedefines += "\n"
@@ -259,7 +266,7 @@ def get_hints(hnt):
 
 def get_condbits(locations):
     cnd_str = ""
-    for (name, loc) in locations:
+    for name, loc in locations:
         conditions = loc["conditions"]
         hints = loc.get("hints") or []
         flaglist = []
@@ -337,7 +344,7 @@ def get_actions(actions):
 
 def bigdump(arr):
     out = ""
-    for (i, _) in enumerate(arr):
+    for i, _ in enumerate(arr):
         if i % 10 == 0:
             if out and out[-1] == " ":
                 out = out[:-1]
@@ -461,7 +468,7 @@ def buildtravel(locs, objs):
                 elif cond[2] in objs[obj][1].get("states", []):
                     state = objs[obj][1].get("states").index(cond[2])
                 else:
-                    for (i, stateclause) in enumerate(objs[obj][1]["descriptions"]):
+                    for i, stateclause in enumerate(objs[obj][1]["descriptions"]):
                         if isinstance(stateclause, list):
                             if stateclause[0] == cond[2]:
                                 state = i
@@ -483,7 +490,7 @@ def buildtravel(locs, objs):
             print(cond)
             raise ValueError
 
-    for (i, (name, loc)) in enumerate(locs):
+    for i, (name, loc) in enumerate(locs):
         if "travel" in loc:
             for rule in loc["travel"]:
                 tt = [i]

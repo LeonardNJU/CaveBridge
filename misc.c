@@ -68,15 +68,13 @@ static void vspeak(const char *msg, bool blank, va_list ap) {
 			 * building. */
 				if (strncmp(msg + i, "floor", 5) == 0 &&
 				    strchr(" .", msg[i + 5]) && !INSIDE(game.loc)) {
-					if (size > 1) {
-						size_t copy = (size_t)(size - 1);
-						if (copy > sizeof("ground") - 1) {
-							copy = sizeof("ground") - 1;
-						}
-						memcpy(renderp, "ground", copy);
-						renderp += copy;
-						size -= (ssize_t)copy;
+					size_t copy = (size_t)(size - 1);
+					if (copy > sizeof("ground") - 1) {
+						copy = sizeof("ground") - 1;
 					}
+					memcpy(renderp, "ground", copy);
+					renderp += copy;
+					size -= (ssize_t)copy;
 					i += 4;
 				} else {
 					*renderp++ = msg[i];
@@ -103,7 +101,7 @@ static void vspeak(const char *msg, bool blank, va_list ap) {
 
 			// Unmodified string specifier.
 				if (msg[i] == 's') {
-					char *arg = va_arg(ap, char *);
+					const char *arg = va_arg(ap, char *);
 					size_t len = strlen(arg);
 					if (len >= (size_t)size) {
 						len = (size_t)(size - 1);
@@ -213,7 +211,7 @@ void echo_input(FILE *destination, const char *input_prompt,
 }
 
 static int word_count(char *str) {
-	char delims[] = " \t";
+	const char delims[] = " \t";
 	int count = 0;
 	int inblanks = true;
 
@@ -508,7 +506,7 @@ static void get_vocab_metadata(const char *word, vocab_t *id,
 	return;
 }
 
-static void tokenize(char *raw, command_t *cmd) {
+static void tokenize(const char *raw, command_t *cmd) {
 	/*
 	 * Be careful about modifying this. We do not want to nuke the
 	 * the speech part or ID from the previous turn.

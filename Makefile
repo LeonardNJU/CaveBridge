@@ -67,7 +67,7 @@ cheat: $(CHEAT_OBJS) dungeon.o
 
 CSUPPRESSIONS = --suppress=missingIncludeSystem --suppress=invalidscanf
 cppcheck:
-	@-cppcheck -I. --quiet --template gcc -UOBJECT_SET_SEEN --enable=all $(CSUPPRESSIONS) *.[ch]
+	@-cppcheck -I. --quiet --template=gcc -UOBJECT_SET_SEEN --enable=all $(CSUPPRESSIONS) *.[ch]
 
 pylint:
 	@-pylint --score=n *.py */*.py

@@ -18,6 +18,12 @@ Make a DOT graph of Colossal Cave.
 
 import sys, getopt, yaml
 
+# pacify pylint
+location_lookup = {}
+object_lookup = {}
+debug = False
+startlocs = {}
+
 
 def allalike(loc):
     "Select out loci related to the Maze All Alike"
@@ -142,7 +148,7 @@ if __name__ == "__main__":
 
     subset = allalike
     debug = False
-    for (switch, val) in options:
+    for switch, val in options:
         if switch == "-a":
             # pylint: disable=unnecessary-lambda-assignment
             subset = lambda loc: True
@@ -175,7 +181,7 @@ if __name__ == "__main__":
     # value is corresponding motion verbs.
     links = {}
     nodes = []
-    for (loc, attrs) in db["locations"]:
+    for loc, attrs in db["locations"]:
         nodes.append(loc)
         travel = attrs["travel"]
         if len(travel) > 0:
@@ -192,7 +198,7 @@ if __name__ == "__main__":
 
     neighbors = set()
     for loc in nodes:
-        for (f, t) in links:
+        for f, t in links:
             if f == "LOC_NOWHERE" or t == "LOC_NOWHERE":
                 continue
             if (f == loc and subset(t)) or (t == loc and subset(f)):
@@ -210,7 +216,7 @@ if __name__ == "__main__":
                 print('    %s [label="%s"]' % (loc[4:], node_label))
 
     # Draw arcs
-    for (f, t) in links:
+    for f, t in links:
         arc = "%s -> %s" % (f[4:], t[4:])
         label = ",".join(links[(f, t)]).lower()
         if len(label) > 0:

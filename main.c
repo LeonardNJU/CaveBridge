@@ -68,7 +68,7 @@ char *myreadline(const char *prompt) {
 				return NULL;
 			}
 
-			char *next = settings.argv[settings.optind++];
+			const char *next = settings.argv[settings.optind++];
 
 			if (settings.scriptfp != NULL &&
 			    feof(settings.scriptfp)) {
@@ -1462,7 +1462,7 @@ int main(int argc, char *argv[]) {
 	const char *opts = "dl:oa:";
 	const char *usage =
 	    "Usage: %s [-l logfilename] [-o] [-a filename] [script...]\n";
-	FILE *rfp = NULL;
+	const FILE *rfp = NULL;
 	const char *autosave_filename = NULL;
 #elif !defined ADVENT_NOSAVE
 	const char *opts = "dl:or:";
