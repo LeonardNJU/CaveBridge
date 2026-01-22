@@ -52,70 +52,91 @@ static void vspeak(const char *msg, bool blank, va_list ap) {
 
 	int msglen = strlen(msg);
 
-	// Rendered string
-	ssize_t size = 2000; /* msglen > 50 ? msglen*2 : 100; */
-	char *rendered = xcalloc(size);
+	// Rendered string (truncate to 4K).
+	ssize_t size = 4096;
+	char *rendered = xcalloc((size_t)size);
 	char *renderp = rendered;
 
 	// Handle format specifiers (including the custom %S) by
 	// adjusting the parameter accordingly, and replacing the
 	// specifier with %s.
 	bool pluralize = false;
-	for (int i = 0; i < msglen; i++) {
+	for (int i = 0; i < msglen && size > 1; i++) {
 		if (msg[i] != '%') {
 			/* Ugh.  Least obtrusive way to deal with artifacts "on
 			 * the floor" being dropped outside of both cave and
 			 * building. */
-			if (strncmp(msg + i, "floor", 5) == 0 &&
-			    strchr(" .", msg[i + 5]) && !INSIDE(game.loc)) {
-				strcpy(renderp, "ground");
-				renderp += 6;
-				i += 4;
-				size -= 5;
-			} else {
-				*renderp++ = msg[i];
-				size--;
-			}
-		} else {
-			i++;
-			// Integer specifier.
-			if (msg[i] == 'd') {
-				int32_t arg = va_arg(ap, int32_t);
-				int ret =
-				    snprintf(renderp, size, "%" PRId32, arg);
-				if (ret < size) {
-					renderp += ret;
-					size -= ret;
-				}
-				pluralize = (arg != 1);
-			}
-
-			// Unmodified string specifier.
-			if (msg[i] == 's') {
-				char *arg = va_arg(ap, char *);
-				strncat(renderp, arg, size - 1);
-				size_t len = strlen(renderp);
-				renderp += len;
-				size -= len;
-			}
-
-			// Singular/plural specifier.
-			if (msg[i] == 'S') {
-				// look at the *previous* numeric parameter
-				if (pluralize) {
-					*renderp++ = 's';
+				if (strncmp(msg + i, "floor", 5) == 0 &&
+				    strchr(" .", msg[i + 5]) && !INSIDE(game.loc)) {
+					if (size > 1) {
+						size_t copy = (size_t)(size - 1);
+						if (copy > sizeof("ground") - 1) {
+							copy = sizeof("ground") - 1;
+						}
+						memcpy(renderp, "ground", copy);
+						renderp += copy;
+						size -= (ssize_t)copy;
+					}
+					i += 4;
+				} else {
+					*renderp++ = msg[i];
 					size--;
 				}
-			}
+			} else {
+			i++;
+			// Integer specifier.
+				if (msg[i] == 'd') {
+					int32_t arg = va_arg(ap, int32_t);
+					int ret =
+					    snprintf(renderp, size, "%" PRId32, arg);
+					if (ret > 0) {
+						if (ret >= size) {
+							renderp += (size - 1);
+							size = 1;
+						} else {
+							renderp += ret;
+							size -= ret;
+						}
+					}
+					pluralize = (arg != 1);
+				}
+
+			// Unmodified string specifier.
+				if (msg[i] == 's') {
+					char *arg = va_arg(ap, char *);
+					size_t len = strlen(arg);
+					if (len >= (size_t)size) {
+						len = (size_t)(size - 1);
+					}
+					if (len > 0) {
+						memcpy(renderp, arg, len);
+						renderp += len;
+						size -= (ssize_t)len;
+					}
+				}
+
+			// Singular/plural specifier.
+				if (msg[i] == 'S') {
+					// look at the *previous* numeric parameter
+					if (pluralize && size > 1) {
+						*renderp++ = 's';
+						size--;
+					}
+				}
 
 			// LCOV_EXCL_START - doesn't occur in test suite.
 			/* Version specifier */
-			if (msg[i] == 'V') {
-				strcpy(renderp, VERSION);
-				size_t len = strlen(VERSION);
-				renderp += len;
-				size -= len;
-			}
+				if (msg[i] == 'V') {
+					size_t len = strlen(VERSION);
+					if (len >= (size_t)size) {
+						len = (size_t)(size - 1);
+					}
+					if (len > 0) {
+						memcpy(renderp, VERSION, len);
+						renderp += len;
+						size -= (ssize_t)len;
+					}
+				}
 			// LCOV_EXCL_STOP
 		}
 	}
@@ -559,6 +580,7 @@ bool get_command_input(command_t *command) {
 	}
 
 	strncpy(inputbuf, input, LINESIZE - 1);
+	inputbuf[LINESIZE - 1] = '\0';
 	free(input);
 
 	tokenize(inputbuf, command);

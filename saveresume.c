@@ -84,21 +84,23 @@ int suspend(void) {
 	}
 	game.saved = game.saved + 5;
 
-	while (fp == NULL) {
-		char *name = myreadline("\nFile name: ");
-		if (name == NULL) {
-			return GO_TOP;
+		while (fp == NULL) {
+			char *name = myreadline("\nFile name: ");
+			char *orig = name;
+			if (name == NULL) {
+				return GO_TOP;
+			}
+			name = strip(name);
+			if (strlen(name) == 0) {
+				free(orig);
+				return GO_TOP; // LCOV_EXCL_LINE
+			}
+			fp = fopen(strip(name), WRITE_MODE);
+			if (fp == NULL) {
+				printf("Can't open file %s, try again.\n", name);
+			}
+			free(orig);
 		}
-		name = strip(name);
-		if (strlen(name) == 0) {
-			return GO_TOP; // LCOV_EXCL_LINE
-		}
-		fp = fopen(strip(name), WRITE_MODE);
-		if (fp == NULL) {
-			printf("Can't open file %s, try again.\n", name);
-		}
-		free(name);
-	}
 
 	savefile(fp);
 	fclose(fp);
@@ -125,21 +127,23 @@ int resume(void) {
 		}
 	}
 
-	while (fp == NULL) {
-		char *name = myreadline("\nFile name: ");
-		if (name == NULL) {
-			return GO_TOP;
+		while (fp == NULL) {
+			char *name = myreadline("\nFile name: ");
+			char *orig = name;
+			if (name == NULL) {
+				return GO_TOP;
+			}
+			name = strip(name);
+			if (strlen(name) == 0) {
+				free(orig);
+				return GO_TOP; // LCOV_EXCL_LINE
+			}
+			fp = fopen(name, READ_MODE);
+			if (fp == NULL) {
+				printf("Can't open file %s, try again.\n", name);
+			}
+			free(orig);
 		}
-		name = strip(name);
-		if (strlen(name) == 0) {
-			return GO_TOP; // LCOV_EXCL_LINE
-		}
-		fp = fopen(name, READ_MODE);
-		if (fp == NULL) {
-			printf("Can't open file %s, try again.\n", name);
-		}
-		free(name);
-	}
 
 	return restore(fp);
 }

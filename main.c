@@ -76,10 +76,15 @@ char *myreadline(const char *prompt) {
 			}
 			if (strcmp(next, "-") == 0) {
 				settings.scriptfp = stdin; // LCOV_EXCL_LINE
-			} else {
-				settings.scriptfp = fopen(next, "r");
+				} else {
+					settings.scriptfp = fopen(next, "r");
+					if (settings.scriptfp == NULL) {
+						fprintf(stderr, "Can't open script %s\n",
+						        next);
+						continue;
+					}
+				}
 			}
-		}
 
 		if (isatty(fileno(settings.scriptfp)) && !settings.oldstyle) {
 			free(buf);               // LCOV_EXCL_LINE
