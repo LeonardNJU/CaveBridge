@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: (C) Eric S. Raymond <esr@thyrsus.com>
 # SPDX-License-Identifier: BSD-2-Clause
 #
-# batchspell: add XYZZY Twopit Bedquilt ne se sw nw dwarves dwarvish gouts
-# batchspell: add Crowther axe pinin Har har meself Adventuredom
-# batchspell: add Tsk gameplay bugfixes
+# spellcheck: add XYZZY Twopit Bedquilt ne se sw nw dwarves dwarvish gouts
+# spellcheck: add Crowther axe pinin Har har meself Adventuredom
+# spellcheck: add Tsk gameplay bugfixes
 #
 # This YAML file gets processed into a collection of data structures and
 # variable initializers describing Colossal Cave.  It replaces an ad-hoc
@@ -3944,13 +3944,13 @@ obituaries:
         Oh dear, you seem to have gotten yourself killed.  I might be able to
         help you out, but I've never really done this before.  Do you want me
         to try to reincarnate you?
-    # batchspell: add wr
+    # spellcheck: add wr
     yes_response: |-
         All right.  But don't blame me if something goes wr......
                             --- POOF!! ---
         You are engulfed in a cloud of orange smoke.  Coughing and gasping,
         you emerge from the smoke and find....
-    # batchspell: remove wr
+    # spellcheck: remove wr
   - query: |-
         You clumsy oaf, you've done it again!  I don't know how long I can
         keep this up.  Do you want me to try reincarnating you again?

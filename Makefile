@@ -76,7 +76,7 @@ check: advent cheat pylint cppcheck spellcheck
 	cd tests; $(MAKE) --quiet
 
 spellcheck:
-	@batchspell adventure.yaml advent.adoc
+	@spellcheck adventure.yaml advent.adoc
 
 reflow:
 	@clang-format --style="{IndentWidth: 8, UseTab: ForIndentation}" -i $$(find . -name "*.[ch]")
