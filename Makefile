@@ -82,7 +82,7 @@ clean:
 	rm -rf coverage advent.info
 	cd tests; $(MAKE) --quiet clean
 
-# Verify
+# Validate
 
 CSUPPRESSIONS = --suppress=checkersReport --suppress=missingIncludeSystem --suppress=invalidscanf
 cppcheck:
