@@ -125,8 +125,7 @@ uninstall:
 
 # README.adoc exists because that filename is magic on GitLab.
 DOCS = COPYING NEWS.adoc README.adoc advent.adoc history.adoc notes.adoc hints.adoc advent.6 INSTALL.adoc
-TESTFILES = tests/*.log tests/*.chk tests/README tests/decheck tests/Makefile
-ALL = $(SOURCES) $(TOCS) $(TESTFILES)
+ALL = $(SOURCES) $(TOCS) $(TESTFILES) tests
 
 advent-$(VERSION).tar.gz: $(ALL)
 	mkdir advent-$(VERSION)
