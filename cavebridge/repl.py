@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import traceback
 from typing import Callable
 
+from cavebridge import diag
 from cavebridge.config import save_config
 from cavebridge.engine import Engine, Turn
 from cavebridge.guide import guide
@@ -18,7 +20,7 @@ from cavebridge.state import GameState
 from cavebridge.vocab import Vocab
 
 _HELP = ("Commands: /help /guide /hint /hints on|off /raw on|off /lang en|zh "
-         "/purist on|off /multistep on|off /autoadvance on|off /config "
+         "/purist on|off /multistep on|off /autoadvance on|off /config /report "
          "/save <name> /load <name> /new /quit  (anything else is spoken to the DM)")
 _NEUTRAL = ParseResult(commands=["(answer)"], cannot=False, reason=None)
 
@@ -55,6 +57,8 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
              config_path: str | None = None,
              narrate_intro: bool = False, resume: bool = False) -> None:
     hints = hints or HintManager(enabled=settings.hints_enabled)
+    save_dir = os.path.dirname(config_path) if config_path else None
+    diag_state: dict = {"line": "", "snapshot": None}   # cur input + last snapshot
 
     def persist_config() -> None:
         if config_path:
@@ -65,6 +69,23 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
                                           "language": settings.language})
             except Exception:
                 pass
+
+    def take_snapshot(kind: str, summary: str, detail: str) -> str | None:
+        """Write a sanitized error snapshot (never the api_key); remember it for /report."""
+        if not save_dir:
+            return None
+        try:
+            text = diag.build_report(
+                kind=kind, summary=summary, detail=detail,
+                base_url=settings.base_url, model=settings.model,
+                language=settings.language, player_input=diag_state["line"],
+                location=getattr(current, "loc_name", "?"), recent=history)
+            path = diag.save_snapshot(save_dir, kind, text)
+            diag_state["snapshot"] = (path, text)
+            return path
+        except Exception:
+            return None
+
     history: list[str] = []      # recent "input -> observation" for the parser
     pending_ask: str | None = None
     ended = False
@@ -110,9 +131,37 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
                     notify(None)         # erase the placeholder before the first words
                 stream_fn(s)
 
-            narrate_stream(llm, english=english, state=state, parse=parse,
-                          hint=hint, language=settings.language, delta=delta,
-                          commands=commands, on_chunk=on_chunk)
+            full = narrate_stream(llm, english=english, state=state, parse=parse,
+                                  hint=hint, language=settings.language, delta=delta,
+                                  commands=commands, on_chunk=on_chunk)
+            if not full.strip():
+                # The model produced nothing — retry once non-streaming. If it's
+                # STILL empty, fall back to the engine's own text and warn the player
+                # (their endpoint/model is the likely culprit) + snapshot it.
+                retry = narrate(llm, english=english, state=state, parse=parse,
+                                hint=hint, language=settings.language,
+                                delta=delta, commands=commands).strip()
+                shown = retry or english.strip()
+                if shown:
+                    if not cleared:
+                        cleared = True
+                        notify(None)
+                    stream_fn(shown)
+                if not retry:
+                    zh = settings.language == "zh"
+                    note = ("\n\n⚠️ 模型这一轮没有任何回复（上面是引擎原文）。多半是你的 LLM "
+                            "端点/模型有问题——请检查 /config 是否有效；可继续操作，仍不行就用 "
+                            "/report 一键上报。" if zh else
+                            "\n\n⚠️ The model returned nothing this turn (raw game text is "
+                            "above). Your LLM endpoint/model is the likely issue — check "
+                            "/config; you can keep playing, and /report files a bug.")
+                    if not cleared:
+                        cleared = True
+                        notify(None)
+                    stream_fn(note)
+                    take_snapshot("empty-narration",
+                                  "model returned empty narration",
+                                  "engine text was:\n" + (english or "(none)"))
             if not cleared:              # nothing streamed -> remove the placeholder
                 notify(None)             # (when chunks DID arrive it's already gone;
             stream_fn("\n")              #  clearing again would erase the last line)
@@ -171,6 +220,111 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
         show(english=turn.text, state=new, parse=parse, hint=hint, delta=delta,
              commands=commands)
 
+    def run_turn(line: str, prev: GameState) -> None:
+        if pending_ask is not None:
+            yes = parse_yes_no(llm, pending_ask, line, settings.language)
+            t = engine.answer(yes)
+            emit_raw(["yes" if yes else "no"], t.text)
+            process(t, _NEUTRAL, prev, ["yes" if yes else "no"])
+            record(line, t.text)
+            return
+
+        parse = parse_intent(llm, current, history, line, vocab, settings.language,
+                             multi_step=settings.multi_step,
+                             auto_advance=settings.auto_advance)
+        if parse.cannot:
+            show(english="", state=current, parse=parse, hint=None, delta=None)
+            record(line, parse.reason or "(couldn't do that)")
+            return
+        # Execute the command sequence. Pseudo-commands are resolved against the
+        # LATEST state: @takeall/@dropall expand after any preceding move (fixes
+        # "enter then take all"); @exits is answered from state, no engine call.
+        texts: list[str] = []
+        info: list[str] = []
+        sent: list[str] = []          # real engine commands (for the raw view)
+        turn = None
+        state_now = current
+        queue = list(parse.commands)
+        if not settings.multi_step:
+            queue = queue[:1]                     # purist: exactly one action / turn
+        guard = 0
+        while queue and guard < 40:
+            guard += 1
+            cmd = queue.pop(0)
+            low = cmd.strip().lower()
+            if low in ("@takeall", "@dropall"):
+                verb = "drop" if low == "@dropall" else "take"
+                objs = state_now.inventory if verb == "drop" else state_now.visible
+                if not settings.multi_step:
+                    objs = objs[:1]               # purist: one item, not a batch
+                queue[:0] = [f"{verb} {o.name}" for o in objs]
+                continue
+            if low in ("@exits", "exits"):
+                info.append("Exits from here: " +
+                            (", ".join(state_now.exits) or "none obvious") + ".")
+                continue
+            if low in ("@save", "save"):
+                if saves:
+                    try:
+                        saves.save("quick", settings.autosave_path)
+                    except Exception:
+                        pass
+                info.append("Saved. (The game also autosaves every turn — your "
+                            "progress is never lost.) Use /save <name> for a named "
+                            "slot and /load <name> to restore it.")
+                continue
+            if low in ("@load", "resume"):
+                info.append("The game autosaves every turn, so progress is kept. To "
+                            "jump back to a named save, use /load <name>.")
+                continue
+            if low.startswith("@repeat"):
+                parts = cmd.split(":", 2)
+                rep_cmd = (parts[1].strip() if len(parts) > 1 else "") or "look"
+                goal = parts[2].strip() if len(parts) > 2 else "advance"
+                if not settings.auto_advance:             # purist: a single step
+                    sent.append(rep_cmd)
+                    turn = engine.step(rep_cmd)
+                    if turn.text:
+                        texts.append(turn.text)
+                    if turn.kind != "normal":
+                        break
+                    state_now = turn.state
+                    continue
+                last_loc = state_now.loc
+                for _ in range(15):                       # hard safety cap
+                    sent.append(rep_cmd)
+                    turn = engine.step(rep_cmd)
+                    if turn.kind != "normal":
+                        break
+                    state_now = turn.state
+                    if turn.state.loc == last_loc:        # move stalled -> stop (free)
+                        break
+                    last_loc = turn.state.loc
+                    stop, _why = judge_loop_stop(llm, goal, turn.text)  # LLM judges
+                    if stop:
+                        break
+                if turn is not None and turn.text:
+                    texts.append(turn.text)               # narrate where we ended
+                if turn is not None and turn.kind != "normal":
+                    break
+                continue
+            sent.append(cmd)
+            turn = engine.step(cmd)
+            if turn.text:
+                texts.append(turn.text)
+            if turn.kind != "normal":
+                break
+            state_now = turn.state
+
+        combined = "\n".join(texts + info)
+        if turn is None:                          # only info / no-op commands
+            turn = Turn("normal", combined or "(nothing happens)", state=state_now)
+        else:
+            turn.text = combined
+        emit_raw(sent, turn.text)
+        process(turn, parse, prev, sent)
+        record(line, turn.text)
+
     while not ended:
         try:
             line = input_fn().strip()
@@ -186,6 +340,25 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
                 break
             elif cmd == "help":
                 output_fn(_HELP)
+            elif cmd == "report":
+                snap = diag_state["snapshot"]
+                zh = settings.language == "zh"
+                if not snap:
+                    output_fn("目前没有可上报的错误。" if zh
+                              else "No recent error to report.")
+                else:
+                    path, text = snap
+                    title = "[bug] " + " ".join(text.split())[:70]
+                    url = diag.issue_url(title, text)
+                    output_fn(("打开下面的链接即可提交（提交前请自行检查内容）：\n" if zh
+                               else "Open this link to file the report (review it first):\n")
+                              + url
+                              + (f"\n（完整快照：{path}）" if zh else f"\n(full snapshot: {path})"))
+                    try:
+                        import webbrowser
+                        webbrowser.open(url)
+                    except Exception:
+                        pass
             elif cmd == "guide":
                 output_fn(guide(settings.language))
             elif cmd == "lang":
@@ -295,108 +468,28 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
             continue
 
         prev = current
-        if pending_ask is not None:
-            yes = parse_yes_no(llm, pending_ask, line, settings.language)
-            t = engine.answer(yes)
-            emit_raw(["yes" if yes else "no"], t.text)
-            process(t, _NEUTRAL, prev, ["yes" if yes else "no"])
-            record(line, t.text)
-            continue
-
-        parse = parse_intent(llm, current, history, line, vocab, settings.language,
-                             multi_step=settings.multi_step,
-                             auto_advance=settings.auto_advance)
-        if parse.cannot:
-            show(english="", state=current, parse=parse, hint=None, delta=None)
-            record(line, parse.reason or "(couldn't do that)")
-            continue
-        # Execute the command sequence. Pseudo-commands are resolved against the
-        # LATEST state: @takeall/@dropall expand after any preceding move (fixes
-        # "enter then take all"); @exits is answered from state, no engine call.
-        texts: list[str] = []
-        info: list[str] = []
-        sent: list[str] = []          # real engine commands (for the raw view)
-        turn = None
-        state_now = current
-        queue = list(parse.commands)
-        if not settings.multi_step:
-            queue = queue[:1]                     # purist: exactly one action / turn
-        guard = 0
-        while queue and guard < 40:
-            guard += 1
-            cmd = queue.pop(0)
-            low = cmd.strip().lower()
-            if low in ("@takeall", "@dropall"):
-                verb = "drop" if low == "@dropall" else "take"
-                objs = state_now.inventory if verb == "drop" else state_now.visible
-                if not settings.multi_step:
-                    objs = objs[:1]               # purist: one item, not a batch
-                queue[:0] = [f"{verb} {o.name}" for o in objs]
-                continue
-            if low in ("@exits", "exits"):
-                info.append("Exits from here: " +
-                            (", ".join(state_now.exits) or "none obvious") + ".")
-                continue
-            if low in ("@save", "save"):
-                if saves:
-                    try:
-                        saves.save("quick", settings.autosave_path)
-                    except Exception:
-                        pass
-                info.append("Saved. (The game also autosaves every turn — your "
-                            "progress is never lost.) Use /save <name> for a named "
-                            "slot and /load <name> to restore it.")
-                continue
-            if low in ("@load", "resume"):
-                info.append("The game autosaves every turn, so progress is kept. To "
-                            "jump back to a named save, use /load <name>.")
-                continue
-            if low.startswith("@repeat"):
-                parts = cmd.split(":", 2)
-                rep_cmd = (parts[1].strip() if len(parts) > 1 else "") or "look"
-                goal = parts[2].strip() if len(parts) > 2 else "advance"
-                if not settings.auto_advance:             # purist: a single step
-                    sent.append(rep_cmd)
-                    turn = engine.step(rep_cmd)
-                    if turn.text:
-                        texts.append(turn.text)
-                    if turn.kind != "normal":
-                        break
-                    state_now = turn.state
-                    continue
-                last_loc = state_now.loc
-                for _ in range(15):                       # hard safety cap
-                    sent.append(rep_cmd)
-                    turn = engine.step(rep_cmd)
-                    if turn.kind != "normal":
-                        break
-                    state_now = turn.state
-                    if turn.state.loc == last_loc:        # move stalled -> stop (free)
-                        break
-                    last_loc = turn.state.loc
-                    stop, _why = judge_loop_stop(llm, goal, turn.text)  # LLM judges
-                    if stop:
-                        break
-                if turn is not None and turn.text:
-                    texts.append(turn.text)               # narrate where we ended
-                if turn is not None and turn.kind != "normal":
-                    break
-                continue
-            sent.append(cmd)
-            turn = engine.step(cmd)
-            if turn.text:
-                texts.append(turn.text)
-            if turn.kind != "normal":
-                break
-            state_now = turn.state
-
-        combined = "\n".join(texts + info)
-        if turn is None:                          # only info / no-op commands
-            turn = Turn("normal", combined or "(nothing happens)", state=state_now)
-        else:
-            turn.text = combined
-        emit_raw(sent, turn.text)
-        process(turn, parse, prev, sent)
-        record(line, turn.text)
+        diag_state["line"] = line
+        try:
+            run_turn(line, prev)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as exc:
+            # A transient LLM/network error must NOT end the game. Snapshot it,
+            # tell the player what to check, and carry on.
+            if notify_fn:
+                notify_fn(None)
+            short = " ".join(str(exc).split())[:200]
+            path = take_snapshot("llm-error", short, traceback.format_exc())
+            if settings.language == "zh":
+                output_fn("⚠️ 这一轮与模型通信出错（游戏没中断，可重试或换模型）：\n  " + short
+                          + "\n请检查你的 LLM 端点/密钥是否有效（用 /config 查看）。"
+                          + (f"\n错误快照已存：{path}。" if path else "")
+                          + " 用 /report 可一键生成上报链接。")
+            else:
+                output_fn("⚠️ Trouble talking to the model this turn (the game is still "
+                          "running — retry or /config another model):\n  " + short
+                          + "\nCheck your LLM endpoint/key (see /config)."
+                          + (f"\nError snapshot saved: {path}." if path else "")
+                          + " Use /report to file a bug.")
 
     engine.close()

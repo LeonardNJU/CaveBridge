@@ -328,6 +328,68 @@ def test_executed_commands_and_delta_reach_narrator():
     assert "now carrying: lamp" in narration                 # state delta
 
 
+def test_empty_narration_retries_then_shows_something():
+    # The streamed narration comes back empty -> retry non-streaming; that text
+    # must still reach the player (no silent turn).
+    llm = FakeLLM(['{"command": "look"}', "", "（回退）你环顾四周。"])
+    chunks = []
+    inputs = iter(["看看", "/quit"])
+    run_repl(settings=Settings(language="zh"), engine=StubEngine(), llm=llm,
+             vocab=Vocab([], [], ["look"]),
+             input_fn=lambda: next(inputs), output_fn=lambda _l: None,
+             stream_fn=chunks.append)
+    assert "回退" in "".join(chunks)
+
+
+def test_empty_narration_last_resort_shows_engine_text():
+    # Stream empty AND the retry empty -> fall back to the engine's own text.
+    llm = FakeLLM(['{"command": "look"}', "", ""])
+    chunks = []
+    inputs = iter(["看看", "/quit"])
+    run_repl(settings=Settings(language="zh"), engine=StubEngine(), llm=llm,
+             vocab=Vocab([], [], ["look"]),
+             input_fn=lambda: next(inputs), output_fn=lambda _l: None,
+             stream_fn=chunks.append)
+    assert "OK" in "".join(chunks)        # StubEngine.step returns "OK"
+
+
+class _BoomLLM(FakeLLM):
+    def complete(self, *a, **k):
+        raise RuntimeError("503 high demand")
+
+    def stream(self, *a, **k):
+        raise RuntimeError("503 high demand")
+        yield  # pragma: no cover
+
+
+def test_llm_error_keeps_repl_alive_and_snapshots(tmp_path):
+    from cavebridge.config import config_path
+    out = []
+    inputs = iter(["看看周围", "/quit"])
+    run_repl(settings=Settings(language="zh"), engine=StubEngine(), llm=_BoomLLM([]),
+             vocab=Vocab([], [], []),
+             input_fn=lambda: next(inputs), output_fn=out.append,
+             config_path=config_path(str(tmp_path)))
+    joined = "\n".join(out)
+    assert "出错" in joined                          # friendly error, not a crash
+    import os
+    errs = os.path.join(str(tmp_path), "errors")     # a snapshot was written
+    assert os.path.isdir(errs) and os.listdir(errs)
+
+
+def test_report_command_builds_issue_url(tmp_path, monkeypatch):
+    import webbrowser
+    from cavebridge.config import config_path
+    monkeypatch.setattr(webbrowser, "open", lambda *a, **k: True)   # don't open a browser
+    out = []
+    inputs = iter(["看看", "/report", "/quit"])
+    run_repl(settings=Settings(language="zh"), engine=StubEngine(), llm=_BoomLLM([]),
+             vocab=Vocab([], [], []),
+             input_fn=lambda: next(inputs), output_fn=out.append,
+             config_path=config_path(str(tmp_path)))
+    assert any("github.com" in s and "issues/new" in s for s in out)
+
+
 def test_purist_caps_to_one_action():
     eng = StubEngine()
     llm = FakeLLM(['{"commands": ["take keys", "take lamp"]}', "好的。"])
