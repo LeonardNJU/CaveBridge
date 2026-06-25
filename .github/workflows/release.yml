@@ -1,6 +1,6 @@
 name: Release
 
-# Cut a release by pushing a tag, e.g.:  git tag v1.21-cavebridge && git push github v1.21-cavebridge
+# Cut a release by pushing a tag, e.g.:  git tag v0.1.1 && git push github v0.1.1
 on:
   push:
     tags: ["v*"]
@@ -10,13 +10,45 @@ permissions:
   contents: write          # create the release + upload assets
 
 jobs:
-  build:
+  # Linux: build inside manylinux (glibc 2.28) so the binary runs on older distros
+  # too (Debian 10/11/12, Ubuntu 18.04+). Building on a normal runner links a glibc
+  # that's too new — e.g. Ubuntu 24.04 needs GLIBC_2.38, which Debian 12 lacks.
+  linux:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build engine + one-file bundle
+        run: |
+          export PATH=/opt/python/cp312-cp312/bin:$PATH
+          pip install --no-cache-dir pyyaml openai pyinstaller
+          make CFLAGS="-DADVENT_AUTOSAVE -DADVENT_NO_EDITLINE" LIBS=
+          pyinstaller --onefile --name cavebridge --noconfirm \
+            --add-data "adventure.yaml:." \
+            --add-binary "advent:." \
+            --collect-all openai --paths . \
+            packaging/cavebridge_entry.py
+          mkdir -p out && cp dist/cavebridge out/cavebridge-linux-x86_64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cavebridge-linux-x86_64
+          path: out/*
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
+
+  # macOS (arm64) + Windows: one-file bundles on their native runners.
+  desktop:
     strategy:
-      fail-fast: false      # one OS failing still ships the others
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            asset: cavebridge-linux-x86_64
           - os: macos-latest
             asset: cavebridge-macos-arm64
           - os: windows-latest
@@ -32,11 +64,10 @@ jobs:
       - name: Python deps (front-end + bundler)
         run: pip install pyyaml openai pyinstaller
 
-      # ---- Linux / macOS: libedit-free engine, then a one-file bundle ----
-      - name: Build engine + bundle (Unix)
-        if: runner.os != 'Windows'
+      # ---- macOS: libedit-free engine, then a one-file bundle ----
+      - name: Build engine + bundle (macOS)
+        if: runner.os == 'macOS'
         run: |
-          make clean
           make CFLAGS="-DADVENT_AUTOSAVE -DADVENT_NO_EDITLINE" LIBS=
           pyinstaller --onefile --name cavebridge --noconfirm \
             --add-data "adventure.yaml:." \
@@ -44,7 +75,7 @@ jobs:
             --collect-all openai --paths . \
             packaging/cavebridge_entry.py
 
-      # ---- Windows: build a native advent.exe via MSYS2/mingw-w64, then bundle ----
+      # ---- Windows: native advent.exe via MSYS2/mingw-w64, then bundle ----
       - name: Set up MSYS2 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -60,7 +91,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          make clean || true
           make CFLAGS="-DADVENT_AUTOSAVE -DADVENT_NO_EDITLINE" LIBS=
           test -f advent.exe || cp advent advent.exe
 
