@@ -123,8 +123,9 @@ uninstall:
 
 # Export
 
-# README.adoc exists because that filename is magic on GitLab.
-DOCS = COPYING NEWS.adoc README.adoc advent.adoc history.adoc notes.adoc hints.adoc advent.6 INSTALL.adoc
+# README.md is the CaveBridge front-end's README; README-open-adventure.adoc is the
+# upstream Open Adventure README (renamed so the front-end README is shown first).
+DOCS = COPYING NEWS.adoc README.md README-open-adventure.adoc advent.adoc history.adoc notes.adoc hints.adoc advent.6 INSTALL.adoc
 ALL = $(SOURCES) $(TOCS) $(TESTFILES) tests
 
 advent-$(VERSION).tar.gz: $(ALL)

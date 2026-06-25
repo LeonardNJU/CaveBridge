@@ -258,7 +258,12 @@ struct settings_t {
 	int optind;
 	FILE *scriptfp;
 	int debug;
+	bool cavebridge; // CaveBridge protocol (-j): state/prompt sentinels
 };
+
+// CaveBridge: which kind of input the engine is about to read (-j sentinel).
+typedef enum { CB_PROMPT_CMD, CB_PROMPT_ASK, CB_PROMPT_AUTO } cb_prompt_t;
+extern cb_prompt_t cb_prompt_kind;
 
 typedef struct {
 	char raw[LINESIZE];
@@ -316,6 +321,7 @@ extern struct settings_t settings;
 
 extern char *myreadline(const char *);
 extern bool get_command_input(command_t *);
+extern void emit_state_json(void);
 extern void clear_command(command_t *);
 extern void speak(const char *, ...);
 extern void sspeak(int msg, ...);

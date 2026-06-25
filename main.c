@@ -4,7 +4,11 @@
  */
 
 #include <ctype.h>
+#ifdef ADVENT_NO_EDITLINE
+#include "editline_shim.h"
+#else
 #include <editline/readline.h>
+#endif
 #include <getopt.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -38,7 +42,11 @@ static void sig_handler(int signo) {
 	}
 
 #if defined ADVENT_AUTOSAVE
-	if (signo == SIGHUP || signo == SIGTERM) {
+	if (signo == SIGTERM
+#ifdef SIGHUP
+	    || signo == SIGHUP
+#endif
+	) {
 		autosave();
 	}
 #endif
@@ -207,6 +215,7 @@ static void checkhints(void) {
 
 				/* Fall through to hint display */
 				game.hints[hint].lc = 0;
+				cb_prompt_kind = CB_PROMPT_AUTO; // CaveBridge
 				if (!yes_or_no(hints[hint].question,
 				               arbitrary_messages[NO_MESSAGE],
 				               arbitrary_messages[OK_MAN])) {
@@ -214,6 +223,7 @@ static void checkhints(void) {
 				}
 				rspeak(HINT_COST, hints[hint].penalty,
 				       hints[hint].penalty);
+				cb_prompt_kind = CB_PROMPT_AUTO; // CaveBridge
 				game.hints[hint].used =
 				    yes_or_no(arbitrary_messages[WANT_HINT],
 				              hints[hint].hint,
@@ -499,6 +509,7 @@ static void croak(void) {
 
 	++game.numdie;
 
+	cb_prompt_kind = CB_PROMPT_ASK; // CaveBridge: reincarnation is a player choice
 	if (game.closng) {
 		/*  He died during closing time.  No resurrection.  Tally up a
 		 *  death and exit. */
@@ -1460,18 +1471,18 @@ int main(int argc, char *argv[]) {
 	/*  Options. */
 
 #if defined ADVENT_AUTOSAVE
-	const char *opts = "dl:oa:";
+	const char *opts = "dl:oa:j";
 	const char *usage =
 	    "Usage: %s [-l logfilename] [-o] [-a filename] [script...]\n";
-	const FILE *rfp = NULL;
+	FILE *rfp = NULL;
 	const char *autosave_filename = NULL;
 #elif !defined ADVENT_NOSAVE
-	const char *opts = "dl:or:";
+	const char *opts = "dl:or:j";
 	const char *usage = "Usage: %s [-l logfilename] [-o] [-r "
 	                    "restorefilename] [script...]\n";
 	FILE *rfp = NULL;
 #else
-	const char *opts = "dl:o";
+	const char *opts = "dl:oj";
 	const char *usage = "Usage: %s [-l logfilename] [-o] [script...]\n";
 #endif
 	while ((ch = getopt(argc, argv, opts)) != EOF) {
@@ -1493,11 +1504,16 @@ int main(int argc, char *argv[]) {
 			settings.oldstyle = true;
 			settings.prompt = false;
 			break;
+		case 'j':
+			settings.cavebridge = true;
+			break;
 #ifdef ADVENT_AUTOSAVE
 		case 'a':
 			rfp = fopen(optarg, READ_MODE);
 			autosave_filename = optarg;
-			signal(SIGHUP, sig_handler);
+#ifdef SIGHUP
+			signal(SIGHUP, sig_handler); // not present on Windows
+#endif
 			signal(SIGTERM, sig_handler);
 			break;
 #elif !defined ADVENT_NOSAVE
@@ -1518,6 +1534,8 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr,
 			        "        -o 'oldstyle' (no prompt, no command "
 			        "editing, displays 'Initialising...')\n");
+			fprintf(stderr, "        -j CaveBridge front-end "
+			                "protocol\n");
 #if defined ADVENT_AUTOSAVE
 			fprintf(stderr, "        -a automatic save/restore "
 			                "from specified saved game file\n");
@@ -1540,6 +1558,7 @@ int main(int argc, char *argv[]) {
 
 #if !defined ADVENT_NOSAVE
 	if (!rfp) {
+		cb_prompt_kind = CB_PROMPT_AUTO; // CaveBridge: auto-decline instructions
 		game.novice = yes_or_no(arbitrary_messages[WELCOME_YOU],
 		                        arbitrary_messages[CAVE_NEARBY],
 		                        arbitrary_messages[NO_MESSAGE]);
@@ -1563,6 +1582,7 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 #else
+	cb_prompt_kind = CB_PROMPT_AUTO; // CaveBridge: auto-decline instructions
 	game.novice = yes_or_no(arbitrary_messages[WELCOME_YOU],
 	                        arbitrary_messages[CAVE_NEARBY],
 	                        arbitrary_messages[NO_MESSAGE]);
@@ -1586,6 +1606,14 @@ int main(int argc, char *argv[]) {
 		if (!do_command()) {
 			break;
 		}
+
+#if defined ADVENT_AUTOSAVE
+		// CaveBridge: penalty-free per-turn snapshot (gated so non-CaveBridge
+		// autosave builds are byte-identical; inert without -a).
+		if (settings.cavebridge) {
+			autosave();
+		}
+#endif
 	}
 	/* show score and exit */
 	terminate(quitgame);

@@ -111,6 +111,7 @@ static phase_codes_t attack(command_t command) {
 		 *  fixed), move rug there (not fixed), and move him there,
 		 *  too.  Then do a null motion to get new description. */
 		rspeak(BARE_HANDS_QUERY);
+		cb_prompt_kind = CB_PROMPT_ASK; // CaveBridge: player decides
 		if (!silent_yes_or_no()) {
 			speak(arbitrary_messages[NASTY_DRAGON]);
 			return GO_MOVE;
@@ -1136,6 +1137,7 @@ static phase_codes_t pour(verb_t verb, obj_t obj) {
 static phase_codes_t quit(void) {
 	/*  Quit.  Intransitive only.  Verify intent and exit if that's what he
 	 * wants. */
+	cb_prompt_kind = CB_PROMPT_ASK; // CaveBridge: player confirms quit
 	if (yes_or_no(arbitrary_messages[REALLY_QUIT],
 	              arbitrary_messages[OK_MAN], arbitrary_messages[OK_MAN])) {
 		terminate(quitgame);
@@ -1166,6 +1168,7 @@ static phase_codes_t read(command_t command)
 		if (!TOTING(OYSTER) || !game.closed) {
 			rspeak(DONT_UNDERSTAND);
 		} else if (!game.clshnt) {
+			cb_prompt_kind = CB_PROMPT_AUTO; // CaveBridge: auto-decline clue
 			game.clshnt = yes_or_no(arbitrary_messages[CLUE_QUERY],
 			                        arbitrary_messages[WAYOUT_CLUE],
 			                        arbitrary_messages[OK_MAN]);

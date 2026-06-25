@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install C build deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libedit-dev pkg-config
+
+      - name: Python deps
+        run: pip install pyyaml openai pytest
+
+      - name: Default build + C regression suite
+        run: |
+          make
+          make cheat
+          (cd tests && make check)
+
+      - name: Autosave (-j) build for the front-end
+        run: make clean && make CFLAGS="-DADVENT_AUTOSAVE"
+
+      - name: Front-end tests
+        run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Docker image (sanity check, no push)
+        run: docker build -t cavebridge .

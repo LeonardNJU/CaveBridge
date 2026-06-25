@@ -6,7 +6,11 @@
  */
 
 #include <ctype.h>
+#ifdef ADVENT_NO_EDITLINE
+#include "editline_shim.h"
+#else
 #include <editline/readline.h>
+#endif
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -18,6 +22,10 @@
 
 #include "advent.h"
 #include "dungeon.h"
+
+// CaveBridge: which kind of input the engine is about to read. Set by the
+// input-site callers (get_command_input / yes_or_no sites); read by get_input.
+cb_prompt_t cb_prompt_kind = CB_PROMPT_CMD;
 
 static void *xcalloc(size_t size) {
 	void *ptr = calloc(size, 1);
@@ -240,6 +248,14 @@ static char *get_input(void) {
 
 	// Print a blank line
 	printf("\n");
+
+	if (settings.cavebridge) {
+		const char *k = (cb_prompt_kind == CB_PROMPT_AUTO)  ? "AUTO"
+		                : (cb_prompt_kind == CB_PROMPT_ASK) ? "ASK"
+		                                                    : "CMD";
+		printf("@@ADVPROMPT %s@@\n", k);
+		fflush(stdout);
+	}
 
 	char *input;
 	for (;;) {
@@ -558,6 +574,7 @@ static void tokenize(const char *raw, command_t *cmd) {
 
 bool get_command_input(command_t *command) {
 	/* Get user input on stdin, parse and map to command */
+	cb_prompt_kind = CB_PROMPT_CMD; // CaveBridge: this is a command prompt
 	char inputbuf[LINESIZE];
 	char *input;
 
@@ -565,6 +582,11 @@ bool get_command_input(command_t *command) {
 		input = get_input();
 		if (input == NULL) {
 			return false;
+		}
+		if (settings.cavebridge && strcmp(input, "@state") == 0) {
+			emit_state_json();
+			free(input);
+			continue;
 		}
 		if (word_count(input) > 2) {
 			rspeak(TWO_WORDS);
@@ -790,6 +812,116 @@ void state_change(obj_t obj, int state) {
 	 * some do */
 	game.objects[obj].prop = state;
 	pspeak(obj, change, true, state);
+}
+
+/* CaveBridge: print a fully JSON-escaped string (NULL -> ""). */
+static void cb_json_str(const char *s) {
+	putchar('"');
+	if (s != NULL) {
+		for (const unsigned char *p = (const unsigned char *)s;
+		     *p != '\0'; p++) {
+			switch (*p) {
+			case '"':
+				fputs("\\\"", stdout);
+				break;
+			case '\\':
+				fputs("\\\\", stdout);
+				break;
+			case '\n':
+				fputs("\\n", stdout);
+				break;
+			case '\r':
+				fputs("\\r", stdout);
+				break;
+			case '\t':
+				fputs("\\t", stdout);
+				break;
+			default:
+				if (*p < 0x20) {
+					printf("\\u%04x", (unsigned)*p);
+				} else {
+					putchar((int)*p);
+				}
+			}
+		}
+	}
+	putchar('"');
+}
+
+/* CaveBridge: emit one object's {id,name,prop}, normalizing fixed-object IDs. */
+static void cb_emit_obj(int raw) {
+	int obj = (raw > NOBJECTS) ? raw - NOBJECTS : raw;
+	const char *nm = (objects[obj].words.n > 0) ? objects[obj].words.strs[0]
+	                                            : objects[obj].inventory;
+	printf("{\"id\":%d,\"name\":", obj);
+	cb_json_str(nm);
+	printf(",\"prop\":%d}", (int)game.objects[obj].prop);
+}
+
+/* CaveBridge: machine-readable snapshot of game state. Triggered by the
+ * reserved "@state" token (see get_command_input); consumes no turn and
+ * mutates nothing after the prompt is reached. */
+void emit_state_json(void) {
+	const char *locname = locations[game.loc].description.small;
+	if (locname == NULL) {
+		locname = locations[game.loc].description.big;
+	}
+	bool dark = IS_DARK_HERE();
+
+	printf("@@ADVSTATE_BEGIN@@{");
+	printf("\"turns\":%ld,", (long)game.turns);
+	printf("\"loc\":%d,", game.loc);
+	printf("\"loc_name\":");
+	cb_json_str(locname);
+	printf(",\"dark\":%s,", dark ? "true" : "false");
+	printf("\"lamp\":{\"on\":%s,\"fuel\":%ld},",
+	       game.objects[LAMP].prop == LAMP_BRIGHT ? "true" : "false",
+	       (long)game.limit);
+	printf("\"flags\":{\"closed\":%s,\"closng\":%s,\"dflag\":%d},",
+	       game.closed ? "true" : "false", game.closng ? "true" : "false",
+	       (int)game.dflag);
+
+	printf("\"visible\":[");
+	if (!dark) {
+		bool first = true;
+		for (int raw = game.locs[game.loc].atloc; raw != 0;
+		     raw = game.link[raw]) {
+			int obj = (raw > NOBJECTS) ? raw - NOBJECTS : raw;
+			if (obj == STEPS && TOTING(NUGGET)) {
+				continue;
+			}
+			/* endgame: don't reveal objects listobjects() hides.
+			 * Both macros must use the NORMALIZED obj (<= NOBJECTS);
+			 * the synthetic raw would index game.objects[] OOB. */
+			if (game.closed &&
+			    (OBJECT_IS_STASHED(obj) || OBJECT_IS_NOTFOUND(obj))) {
+				continue;
+			}
+			if (!first) {
+				putchar(',');
+			}
+			first = false;
+			cb_emit_obj(raw);
+		}
+	}
+	printf("],");
+
+	printf("\"inventory\":[");
+	{
+		bool first = true;
+		for (int obj = 1; obj <= NOBJECTS; obj++) {
+			if (game.objects[obj].place != CARRIED) {
+				continue;
+			}
+			if (!first) {
+				putchar(',');
+			}
+			first = false;
+			cb_emit_obj(obj);
+		}
+	}
+	printf("]}@@ADVSTATE_END@@\n");
+	fflush(stdout);
 }
 
 /* end */

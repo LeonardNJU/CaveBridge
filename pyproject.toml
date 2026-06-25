@@ -1,0 +1,16 @@
+[project]
+name = "open-adventure"
+version = "0.1.0"
+description = "CaveBridge: LLM front-end for Open Adventure"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0.3",
+    "openai>=1.40",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests_cavebridge"]

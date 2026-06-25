@@ -1,0 +1,13 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.o
+advent
+cheat
+dungeon.c
+dungeon.h
+docs/
+tests/
+*.adv

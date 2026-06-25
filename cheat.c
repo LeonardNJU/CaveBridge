@@ -8,7 +8,11 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 #include "advent.h"
+#ifdef ADVENT_NO_EDITLINE
+#include "editline_shim.h"
+#else
 #include <editline/readline.h>
+#endif
 #include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
