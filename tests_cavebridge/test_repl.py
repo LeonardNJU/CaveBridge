@@ -423,6 +423,17 @@ def test_report_command_builds_issue_url(tmp_path, monkeypatch):
     assert any("github.com" in s and "issues/new" in s for s in out)
 
 
+def test_chitchat_replies_without_touching_the_engine():
+    eng = StubEngine()
+    llm = FakeLLM(['{"chat": true}', "你好，冒险家！准备好进洞了吗？"])
+    out = []
+    inputs = iter(["你好", "/quit"])
+    run_repl(settings=Settings(language="zh"), engine=eng, llm=llm, vocab=Vocab([], [], []),
+             input_fn=lambda: next(inputs), output_fn=out.append)
+    assert eng.sent == []                          # chit-chat never hits the engine
+    assert any("冒险家" in s for s in out)          # DM replied conversationally
+
+
 def test_purist_caps_to_one_action():
     eng = StubEngine()
     llm = FakeLLM(['{"commands": ["take keys", "take lamp"]}', "好的。"])

@@ -41,14 +41,24 @@ player good company. STRICT RULES:
   "2 英寸(约 5 厘米)", "3x3 英尺(约 1x1 米)".
 - FAILURE: if an action failed or was impossible, say so briefly and in character using
   only the engine's reason; don't spin it into a story.
-- OFF-TOPIC: for chit-chat or unparseable input, reply in ONE short in-character line."""
+- CHIT-CHAT: if told the player is just talking to you (a greeting, thanks, a question
+  to you, small talk), reply warmly in one or two short in-character lines and gently
+  steer back to the adventure. Never go far off-topic; never invent game events."""
 
 
 def _messages(*, english: str, state: GameState, parse: ParseResult,
               hint: str | None, language: str, delta: str | None,
-              commands: list[str] | None = None) -> list[dict]:
+              commands: list[str] | None = None,
+              player_text: str | None = None) -> list[dict]:
     parts = [f"Target language: {language}.",
              f"Current location: {state.loc_name} (dark: {state.dark})."]
+    if getattr(parse, "chat", False):
+        parts.append("The player is NOT issuing a game action — they are talking to you: "
+                     f"{player_text!r}. Reply warmly in one or two short in-character "
+                     "lines as their Dungeon Master, then gently steer back to the "
+                     "adventure. Don't go off-topic and don't invent game events.")
+        return [{"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": "\n\n".join(parts)}]
     if commands:
         parts.append("Player action(s) this turn, already executed by the engine: "
                      + ", ".join(commands) + ".")
@@ -77,21 +87,22 @@ _MAX_TOKENS = 800
 
 def narrate(llm: LLM, *, english: str, state: GameState, parse: ParseResult,
             hint: str | None, language: str, delta: str | None = None,
-            commands: list[str] | None = None) -> str:
+            commands: list[str] | None = None, player_text: str | None = None) -> str:
     return llm.complete(_messages(english=english, state=state, parse=parse,
                                   hint=hint, language=language, delta=delta,
-                                  commands=commands),
+                                  commands=commands, player_text=player_text),
                         temperature=0.7, max_tokens=_MAX_TOKENS)
 
 
 def narrate_stream(llm: LLM, *, english: str, state: GameState, parse: ParseResult,
                    hint: str | None, language: str, delta: str | None = None,
-                   commands: list[str] | None = None,
+                   commands: list[str] | None = None, player_text: str | None = None,
                    on_chunk: Callable[[str], None]) -> str:
     """Stream the narration through on_chunk as it is generated; return the full
     text. Falls back to a single chunk for non-streaming LLMs."""
     messages = _messages(english=english, state=state, parse=parse, hint=hint,
-                         language=language, delta=delta, commands=commands)
+                         language=language, delta=delta, commands=commands,
+                         player_text=player_text)
     full = ""
     for chunk in llm.stream(messages, temperature=0.7, max_tokens=_MAX_TOKENS):
         full += chunk

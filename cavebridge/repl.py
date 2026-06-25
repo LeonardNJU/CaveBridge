@@ -130,7 +130,8 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
         if english and english.strip():
             output_fn("  ⟦raw⟧ " + english.strip().replace("\n", "\n        "))
 
-    def show(*, english, state, parse, hint, delta, commands=None) -> None:
+    def show(*, english, state, parse, hint, delta, commands=None,
+             player_text=None) -> None:
         # "DM is writing…" placeholder while the LLM generates; cleared the moment
         # real output is ready (first stream chunk, or the finished text).
         notify = notify_fn or (lambda _msg: None)
@@ -147,14 +148,15 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
 
             full = narrate_stream(llm, english=english, state=state, parse=parse,
                                   hint=hint, language=settings.language, delta=delta,
-                                  commands=commands, on_chunk=on_chunk)
+                                  commands=commands, player_text=player_text,
+                                  on_chunk=on_chunk)
             if not full.strip():
                 # The model produced nothing — retry once non-streaming. If it's
                 # STILL empty, fall back to the engine's own text and warn the player
                 # (their endpoint/model is the likely culprit) + snapshot it.
                 retry = narrate(llm, english=english, state=state, parse=parse,
-                                hint=hint, language=settings.language,
-                                delta=delta, commands=commands).strip()
+                                hint=hint, language=settings.language, delta=delta,
+                                commands=commands, player_text=player_text).strip()
                 shown = retry or english.strip()
                 if shown:
                     if not cleared:
@@ -182,7 +184,7 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
         else:
             text = narrate(llm, english=english, state=state, parse=parse,
                           hint=hint, language=settings.language, delta=delta,
-                          commands=commands)
+                          commands=commands, player_text=player_text)
             notify(None)
             output_fn(text)
 
@@ -246,6 +248,11 @@ def run_repl(*, settings: Settings, engine: Engine, llm: LLM, vocab: Vocab,
         parse = parse_intent(llm, current, history, line, vocab, settings.language,
                              multi_step=settings.multi_step,
                              auto_advance=settings.auto_advance)
+        if parse.chat:                       # player talking to the DM, not a game move
+            show(english="", state=current, parse=parse, hint=None, delta=None,
+                 player_text=line)
+            record(line, "(chat)")
+            return
         if parse.cannot:
             show(english="", state=current, parse=parse, hint=None, delta=None)
             record(line, parse.reason or "(couldn't do that)")

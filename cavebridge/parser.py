@@ -35,8 +35,11 @@ _RULE_AUTOADVANCE = """\
   e.g. "顺着小溪一直下游直到看见栅栏" -> ["@repeat:downstream:reach the grate"];
   "一直往北走" -> ["@repeat:north:keep heading north until something blocks the way"]."""
 
-# Always-on rules — exits Q&A, save/load routing, passthrough, vocabulary.
+# Always-on rules — chit-chat, exits Q&A, save/load routing, passthrough, vocabulary.
 _RULE_TAIL = """\
+- CHIT-CHAT: if the input is not a game action but the player talking TO YOU — a
+  greeting, thanks, small talk, or a question about you or the game itself ("hi",
+  "你好", "你是谁", "这游戏真好玩", "在吗") -> {"chat": true}. Never map it to a game word.
 - A question about where the player can go / what the exits are ("有哪些出口","能去哪",
   "附近有什么路") -> ["@exits"].
 - Saving/loading is handled by the front-end, NOT the engine. "save"/"存档"/"保存" ->
@@ -70,6 +73,7 @@ class ParseResult:
     commands: list[str] | None
     cannot: bool
     reason: str | None
+    chat: bool = False           # player talking to the DM, not a game action
 
 
 def _extract_json(text: str) -> dict | None:
@@ -127,6 +131,8 @@ def parse_intent(llm: LLM, state: GameState, history: list[str],
     data = _extract_json(raw)
     if data is None:
         return ParseResult(None, True, "(could not understand that)")
+    if data.get("chat"):
+        return ParseResult(None, False, None, chat=True)
     if data.get("cannot"):
         return ParseResult(None, True, data.get("reason", ""))
     cmds = data.get("commands")
