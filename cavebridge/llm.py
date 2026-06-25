@@ -65,17 +65,25 @@ class LLM(Protocol):
 
 
 class LLMClient:
-    def __init__(self, model: str, base_url: str | None, api_key: str | None):
+    def __init__(self, model: str, base_url: str | None, api_key: str | None,
+                 timeout: float = 60.0):
         from openai import OpenAI
         self._OpenAI = OpenAI
+        self._timeout = timeout
         self.model = model
-        self.client = OpenAI(base_url=base_url, api_key=api_key or "none")
+        self.client = self._build(base_url, api_key)
+
+    def _build(self, base_url: str | None, api_key: str | None):
+        # A finite timeout (+ one retry) so a hung endpoint surfaces as an error in
+        # ~seconds instead of freezing the game for the SDK's 10-minute default.
+        return self._OpenAI(base_url=base_url, api_key=api_key or "none",
+                            timeout=self._timeout, max_retries=1)
 
     def reconfigure(self, base_url: str | None, api_key: str | None,
                     model: str) -> None:
         """Rebuild the client/model so /config can change the endpoint live."""
         self.model = model
-        self.client = self._OpenAI(base_url=base_url, api_key=api_key or "none")
+        self.client = self._build(base_url, api_key)
 
     def complete(self, messages: list[dict], *, json_mode: bool = False,
                  temperature: float = 0.7, max_tokens: int | None = None) -> str:

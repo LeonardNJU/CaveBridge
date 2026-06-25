@@ -103,14 +103,15 @@ def test_max_tokens_omitted_when_none():
 def test_reconfigure_rebuilds_client_and_model():
     made = []
 
-    def fake_openai(base_url=None, api_key=None):
-        made.append((base_url, api_key))
+    def fake_openai(base_url=None, api_key=None, **kw):
+        made.append((base_url, api_key, kw.get("timeout")))
         return ("client", base_url, api_key)
 
     c = LLMClient.__new__(LLMClient)
     c._OpenAI = fake_openai
+    c._timeout = 60.0
     c.model, c.client = "old", "oldclient"
     c.reconfigure("http://new/v1", "k2", "newmodel")
     assert c.model == "newmodel"
     assert c.client == ("client", "http://new/v1", "k2")
-    assert made == [("http://new/v1", "k2")]
+    assert made == [("http://new/v1", "k2", 60.0)]      # timeout passed through

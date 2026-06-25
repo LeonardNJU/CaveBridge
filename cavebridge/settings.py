@@ -19,6 +19,7 @@ class Settings:
     api_key: str | None = None
     advent_path: str = "./advent"
     autosave_path: str = ""   # set by __main__ to a unique per-session path
+    timeout: float = 60.0     # per-LLM-request timeout (s) so a hung endpoint can't freeze the game
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -37,4 +38,5 @@ class Settings:
             base_url=os.environ.get("OPENAI_BASE_URL"),
             api_key=os.environ.get("OPENAI_API_KEY"),
             advent_path=os.environ.get("CAVEBRIDGE_ADVENT", "./advent"),
+            timeout=float(os.environ.get("CAVEBRIDGE_TIMEOUT", "60")),
         )

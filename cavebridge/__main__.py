@@ -72,7 +72,8 @@ def main() -> None:
     elif not cfg:                       # seed config from env on first run
         save_config(cfg_path, vars_for_config(s))
 
-    llm = LLMClient(model=s.model, base_url=s.base_url, api_key=s.api_key)
+    llm = LLMClient(model=s.model, base_url=s.base_url, api_key=s.api_key,
+                    timeout=s.timeout)
     # Locate the engine binary + data: explicit env override, else search the cwd,
     # the PyInstaller bundle dir (frozen release), then the repo root.
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
