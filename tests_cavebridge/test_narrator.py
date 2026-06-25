@@ -69,6 +69,21 @@ def test_narration_lists_items_commands_and_delta():
     assert "COMPLETE" in system and "ACKNOWLEDGE ACTIONS" in system
 
 
+def test_exits_not_volunteered_every_turn():
+    # Regression: don't feed the exit list into every narration — volunteering it
+    # turns the open world into a multiple-choice menu.
+    st = GameState(turns=1, loc=1, loc_name="road", dark=False,
+                   exits=["north", "south", "west", "in"])
+    rec = _RecLLM()
+    narrate(rec, english="You are at the end of a road before a small building.",
+            state=st, parse=ParseResult(["look"], False, None),
+            hint=None, language="zh")
+    user = rec.kw["messages"][-1]["content"]
+    assert "Exits available" not in user and "north, south" not in user
+    system = rec.kw["messages"][0]["content"]
+    assert "menu" in system.lower()                     # the no-volunteer rule is present
+
+
 def test_narration_uses_a_token_ceiling():
     # so long room descriptions are never truncated mid-sentence
     rec = _RecLLM()
