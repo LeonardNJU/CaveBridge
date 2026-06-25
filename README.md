@@ -5,6 +5,11 @@ SPDX-License-Identifier: BSD-2-Clause
 
 **English** · [简体中文](README.zh.md)
 
+<p align="center">
+  <img src="assets/hero.png" width="860"
+       alt="CaveBridge — a natural-language interface for deterministic text-adventure worlds">
+</p>
+
 # Open Adventure × LLM — *CaveBridge*
 
 > Play the 1977 classic **Colossal Cave Adventure** in natural language — an LLM
@@ -55,6 +60,27 @@ and no hints, exactly like the original — just understandable and in your lang
 ```
 
 Or flip features individually: `/multistep on|off`, `/autoadvance on|off`, `/hints on|off`.
+
+---
+
+## See it in action
+
+You just talk — multi-step actions ("take everything, leave"), asking where you can go,
+following the stream downstream to the locked grate. The `⟦cmd⟧` / `⟦raw⟧` lines (toggle
+with `/raw`) reveal the exact canonical command and the engine's own output behind each
+turn, so nothing is hidden.
+
+<p align="center">
+  <img src="assets/screenshot-play.png" width="900"
+       alt="Natural-language play: take everything, ask for exits, follow the stream to the grate">
+</p>
+
+A new game opens with a how-to-play guide and the DM narrating the first scene:
+
+<p align="center">
+  <img src="assets/screenshot-guide.png" width="640"
+       alt="Startup guide and the DM narrating the opening scene">
+</p>
 
 ---
 
